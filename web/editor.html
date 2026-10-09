@@ -1687,7 +1687,7 @@ function makeMockDevice(opt = {}) {
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL",
-      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE"], 0), E("SET", NGO, 0),
+      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE", "MEOW"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
     D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
@@ -1772,6 +1772,16 @@ function makeMockDevice(opt = {}) {
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
+    /* MEOW-1: engine 14, cat calls (eng_meow.c) */
+    { name: "MEOW", titles: ["CALL", "TONE"], edit: [E("MODE", ["MEOW", "MEW", "MRRP", "YOWL", "PURR", "HISS"], 0),
+        D("SIZE", F.INT, 0, 127, 64), D("LEN", F.INT, 0, 127, 84), D("BEND", F.SEMI, 0, 12, 6), D("WOW", F.PCT, 0, 127, 30),
+        D("BRTH", F.PCT, 0, 127, 45), D("ROUGH", F.PCT, 0, 127, 10), D("RAND", F.PCT, 0, 127, 30)],
+      presets: [P("MEOW LEAD", [0, 64, 84, 6, 30, 45, 10, 30], [0, 64, 127, 40], 0, 14),
+        P("HISS HAT", [5, 64, 14, 0, 0, 0, 20, 30], [0, 64, 127, 40], 0, 0), P("PURR BASS", [4, 64, 40, 0, 0, 10, 0, 10], [0, 64, 127, 40], 0, 2),
+        P("MRRP", [2, 64, 60, 5, 0, 30, 10, 40], [0, 64, 127, 40], 0, 6), P("YOWL", [3, 90, 110, 9, 80, 60, 40, 30], [0, 64, 127, 40], 1, 5),
+        P("MEW", [1, 40, 50, 4, 20, 40, 5, 40], [0, 64, 127, 40], 0, 7), P("KITTEN", [1, 0, 40, 5, 40, 50, 0, 50], [0, 64, 127, 40], 0, 3),
+        P("TOMCAT", [0, 127, 95, 7, 40, 55, 45, 30], [0, 64, 127, 40], 1, 4), P("PURR SUB", [4, 80, 127, 0, 0, 15, 0, 5], [0, 64, 127, 40], 1, 8),
+        P("HISS OPEN", [5, 64, 60, 0, 0, 0, 30, 30], [0, 64, 127, 40], 0, 0)] },
   ];
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_OWN = FM6.FACTORY_PK.length, DRUM_E = ENG.findIndex((e) => e.name === "DRUM");
   /* factory PATTERNS[] (engines.c; the device loads them from SAVE > PHRASES, presets only suggest one): absolute
@@ -1791,6 +1801,7 @@ function makeMockDevice(opt = {}) {
     [[60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75], [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]],
     [[36, 42, 42, 42, 38, 42, 36, 42, 36, 42, 42, 36, 38, 42, 46, 42], [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]],   /* 12 BEAT (DRUM) */
     [[48, 51, 55, 60, 63, 67, 72, 75, 48, 51, 55, 60, 63, 67, 72, 75], [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]],   /* 13 ARP */
+    [[72, 0, 0, 75, 0, 77, 0, 79, 0, 0, 77, 0, 75, 0, 72, 0], [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]],   /* 14 MIAU (MEOW) */
   ];
   for (let op = 0; op < 4; op++) TP.push(D("ATK", F.TIME, 0, 127, 0), D("DEC", F.TIME, 0, 127, 0), D("SUS", F.PCT, 0, 127, 127), D("REL", F.TIME, 0, 127, 0), D("LVL", F.PCT, 0, 127, 127));
   TP.push(E("CHRD", ["OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7", "SUS4", "POW"], 0),   /* the chord keys 81, 82 */
@@ -1915,7 +1926,8 @@ function makeMockDevice(opt = {}) {
     st.bank[slot] = snapshot(name);
     clearSteps(); st.p[29] = 16;
   });
-  /* the power-on sounds (engines.c TRK_DEF): ACID, PAD, PULSE LD, DRUM KIT */
+  /* the power-on sounds (engines.c TRK_DEF with FELUCCA_TRK_DEF=1, the host tests' fixture): ACID, PAD, PULSE LD, DRUM
+     KIT. MEOW-1 itself starts with PURR BASS, MEOW LEAD, HISS HAT, DRUM KIT */
   [[1, FM6_E, 4], [2, 3, 0], [3, 10, 0], [0, 0, 4]].forEach(([i, e, p]) => { st.sel = i; setEngine(e); applyPreset(p); });
   /* the device powers on with its sequencers empty; the mock starts as a little demo to look at: track 1 with
      the ACID pattern, track 4 with BEAT (as SAVE > PHRASES would load them), pads left, lead right */
@@ -2420,8 +2432,8 @@ function enumShown(d) {
 /* the order the device shows its engines in (src/engines.c ENGINE_ORDER): the lists here follow it, the protocol keeps
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
-const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "NOISE",
-  "SLICE", "DRUM"];
+const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "MEOW", "TRIO", "WHEEL", "GRAIN", "PHYS",
+  "NOISE", "SLICE", "DRUM"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
   return (names || []).map((n, i) => i).filter((i) => names[i] !== "-")

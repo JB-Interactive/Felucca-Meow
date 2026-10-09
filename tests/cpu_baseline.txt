@@ -74,6 +74,18 @@ cpu/FM6/06_ORGAN 1433
 cpu/FM6/07_PLUCK 886
 cpu/SLICE/00_CHOP 982
 cpu/SLICE/01_STUTTER 1008
+# MEOW (MEOW-1 fork): estimated, not counted (Linux has no proc_pid_rusage): host time of 20 s with 8 keys
+# held, against VOICE's on the same host (its instructions above), +10 %. Count them on a Mac (BUDGET_UPDATE=1).
+cpu/MEOW/00_MEOW_LEAD 998
+cpu/MEOW/01_HISS_HAT 856
+cpu/MEOW/02_PURR_BASS 938
+cpu/MEOW/03_MRRP 907
+cpu/MEOW/04_YOWL 743
+cpu/MEOW/05_MEW 950
+cpu/MEOW/06_KITTEN 1042
+cpu/MEOW/07_TOMCAT 702
+cpu/MEOW/08_PURR_SUB 696
+cpu/MEOW/09_HISS_OPEN 857
 cpu/mix/idle 286
 cpu/mix/idle_drums 552
 cpu/mix/3parts_full_drums 1574

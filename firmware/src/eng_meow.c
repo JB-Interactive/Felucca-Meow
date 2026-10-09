@@ -21,11 +21,11 @@
  * Wide bands (the measured spectrum has no sharp formant peaks), a bright pulse, a +6 dB / oct shelf
  * and the bypass give the flat spectrum; each glottal period draws its own length and level.
  *
- *   MODE    the call: MEOW, PURR, HISS (MEW MRRP YOWL play MEOW for now)
+ *   MODE    the call: MEOW, MEW, MRRP (a trill), YOWL, PURR, HISS
  *   SIZE    the tract: x1.33 .. x0.75 of the formants (kitten .. big tom)
  *   LEN     0.15 .. 1.5 s; at 127 the call holds at its peak while the key is held, then closes
  *   BEND    the arc, 0 .. 12 semitones: the start ~BEND / 2 below the key, the end ~0.7 BEND below
- *   WOW     vibrato (6.5 Hz) in the second half, up to +-1 semitone
+ *   WOW     vibrato, up to +-1 semitone: MEOW / MEW 6.5 Hz in the second half, YOWL 4.2 Hz from early on
  *   BRTH    breath noise into the resonators (default: the measured HNR)
  *   ROUGH   every second glottal pulse weaker (a subharmonic, growl) and more jitter
  *   RAND    per note: LEN, BEND and SIZE wander (0 = every meow alike)
@@ -101,8 +101,28 @@ static const uint16_t PURR_BW[4] = {300, 400, 200, 250};
 #define PURR_GAIN 40                                    /* clicks through a shut mouth: little energy */
 static const mpt_t PURR_AMP[] = {{0, 0}, {12, 256}, {225, 230}, {255, 0}};
 
+/* MEW: McKinley's high mew ([i] .. [u], after Schoetz & van de Weijer 2014): short, the mouth barely open,
+ * a small arc peaking early. MRRP: the chirrup / trill, a short call with the mouth shut at first (Schoetz's
+ * pilot study, cited in J. Vet. Sci. 21 (2020) e18: chirrups 0.15 s, mean F0 661 Hz; the murmur, a soft voiced
+ * trill, 0.51 s), here pulsed at 25 Hz as a purr is and rising like a question. YOWL: the long call, fitted to
+ * the long calls of CSDB "Mating" / "Paining" (1.2 .. 3.7 s, vibrato 3.5 .. 4.8 Hz, HNR 9 .. 17 dB): the mouth
+ * wide open, then [o] .. [u], a slow vibrato from early on */
+static const mpt_t MEW_AMP[] = {{0, 0}, {20, 200}, {70, 256}, {150, 180}, {255, 0}};
+static const mpt_t MEW_JAW[] = {{0, 0}, {60, 110}, {140, 80}, {255, 0}};
+static const mpt_t MEW_ROUND[] = {{0, 0}, {140, 0}, {255, 200}};
+static const mpt_t MEW_PITCH[] = {{0, -80}, {50, 0}, {150, -60}, {255, -200}};
+static const mpt_t MRRP_AMP[] = {{0, 0}, {10, 220}, {120, 256}, {230, 200}, {255, 0}};
+static const mpt_t MRRP_JAW[] = {{0, 0}, {150, 30}, {230, 160}, {255, 120}};
+static const mpt_t MRRP_NASAL[] = {{0, 256}, {120, 200}, {200, 0}, {255, 0}};
+static const mpt_t MRRP_PITCH[] = {{0, -256}, {90, -200}, {200, -40}, {255, 0}};
+static const mpt_t YOWL_AMP[] = {{0, 0}, {15, 200}, {40, 256}, {200, 230}, {240, 120}, {255, 0}};
+static const mpt_t YOWL_JAW[] = {{0, 140}, {30, 256}, {150, 230}, {255, 40}};
+static const mpt_t YOWL_ROUND[] = {{0, 0}, {100, 30}, {255, 256}};
+static const mpt_t YOWL_PITCH[] = {{0, -150}, {30, 0}, {180, -40}, {255, -200}};
+
 /* a call: its curves, its mouth, voiced or breath only, LEN's time x dur / 16, formant key tracking / 127,
- * its own open quotient (Q16, 0: from the level) and breathing (depth of a 1.25 Hz swell, Q8 of the level) */
+ * its own open quotient (Q16, 0: from the level), its vibrato (rate: 16-bit phase per control tick, from u Q8)
+ * and its pulsing (rate, depth Q8 of the level: PURR's breath, MRRP's trill; a call that pulses has no vibrato) */
 typedef struct { const mpt_t *p; uint8_t n; } mcv_t;
 #define MCV(a) {a, NELEM(a)}
 typedef struct {
@@ -110,19 +130,25 @@ typedef struct {
     const uint16_t *f0, *fj, *bw;
     const uint8_t *rf;
     uint8_t voiced, dur, folow;
-    uint16_t oq;
-    uint8_t breath;
+    uint16_t oq, vib_rate;
+    uint8_t vib_from;
+    uint16_t am_rate;
+    uint8_t am_depth;
 } mcall_t;
 static const mcall_t MEOW_CALL = {MCV(MEOW_AMP), MCV(MEOW_JAW), MCV(MEOW_ROUND), MCV(MEOW_NASAL), MCV(MEOW_PITCH),
-                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 16, MEOW_FOLOW, 0, 0};
+                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 16, MEOW_FOLOW, 0, 309, 100, 0, 0};
 static const mcall_t HISS_CALL = {MCV(HISS_AMP), MCV(HISS_JAW), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO),
-                                  HISS_F0, HISS_FJ, HISS_BW, HISS_RND, 0, 4, 64, 0, 0};
+                                  HISS_F0, HISS_FJ, HISS_BW, HISS_RND, 0, 4, 64, 0, 0, 0, 0, 0};
 static const mcall_t PURR_CALL = {MCV(PURR_AMP), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO),
-                                  PURR_F0, PURR_FJ, PURR_BW, HISS_RND, 1, 16, 0, 800, 180};
-static const mcall_t *meow_call(const int16_t *p)    /* MEW MRRP YOWL: MEOW for now */
-{
-    return p[P_E0] == MEOW_HISS ? &HISS_CALL : p[P_E0] == MEOW_PURR ? &PURR_CALL : &MEOW_CALL;
-}
+                                  PURR_F0, PURR_FJ, PURR_BW, HISS_RND, 1, 16, 0, 800, 0, 0, 59, 180};
+static const mcall_t MEW_CALL = {MCV(MEW_AMP), MCV(MEW_JAW), MCV(MEW_ROUND), MCV(MEOW_ZERO), MCV(MEW_PITCH),
+                                 MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 7, MEOW_FOLOW, 0, 309, 80, 0, 0};
+static const mcall_t MRRP_CALL = {MCV(MRRP_AMP), MCV(MRRP_JAW), MCV(MEOW_ZERO), MCV(MRRP_NASAL), MCV(MRRP_PITCH),
+                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 6, MEOW_FOLOW, 0, 0, 0, 1189, 200};
+static const mcall_t YOWL_CALL = {MCV(YOWL_AMP), MCV(YOWL_JAW), MCV(YOWL_ROUND), MCV(MEOW_ZERO), MCV(YOWL_PITCH),
+                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 40, MEOW_FOLOW, 0, 200, 30, 0, 0};
+static const mcall_t *const MEOW_CALLS[MEOW_NMODE] = {&MEOW_CALL, &MEW_CALL, &MRRP_CALL, &YOWL_CALL, &PURR_CALL, &HISS_CALL};
+static const mcall_t *meow_call(const int16_t *p) { return MEOW_CALLS[(uint32_t)p[P_E0] % MEOW_NMODE]; }
 #define MC(c, k, u8) mcurve((c)->k.p, (c)->k.n, (u8))
 
 /* the note's random value k (-128 .. 127, three of them from 11 bits), scaled by RAND */
@@ -151,7 +177,7 @@ static int32_t meow_amp(track_t *t, voice_t *v, int32_t adsr)
     const int16_t *p = t->p;
     const mcall_t *c = meow_call(p);
     uint32_t u = (uint32_t)v->s[7] & MEOW_UMASK, inc;
-    int32_t len = p[P_E2];
+    int32_t len = p[P_E2], lvl;
     (void)adsr;
     if (!v->active)                                     /* (taken for another part: env_tick ended it) */
         return 0;
@@ -175,7 +201,12 @@ static int32_t meow_amp(track_t *t, voice_t *v, int32_t adsr)
         u = MEOW_U1;
     v->s[7] = (int32_t)(((uint32_t)v->s[7] & ~(uint32_t)MEOW_UMASK) | u);
 level:
-    return (MC(c, amp, (int32_t)(u >> 4)) * 32767) >> 8;
+    lvl = MC(c, amp, (int32_t)(u >> 4));
+    if (c->am_depth) {                                  /* PURR's breath, MRRP's trill (16-bit phase in ph[2] 16..31) */
+        v->ph[2] += (uint32_t)c->am_rate << 16;
+        lvl = (lvl * (256 - ((c->am_depth * (32768 - sine_i(v->ph[2] & 0xFFFF0000u))) >> 16))) >> 8;
+    }
+    return (lvl * 32767) >> 8;
 }
 
 static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
@@ -193,9 +224,9 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     bend = p[P_E3] * 16;
     bend += (bend * meow_rnd(v, p, 1) * 102) >> 15;
     pst = (MC(c, pitch, u8) * bend) >> 8;
-    if (p[P_E4] && u8 > 100 << 8) {                     /* vibrato fades in from u 0.39 to 0.6 */
-        int32_t fade = clamp((u8 - (100 << 8)) / 54, 0, 256);
-        ap += 309u << 16;                               /* 6.5 Hz per control tick (16-bit phase in ph[2] 16..31) */
+    if (p[P_E4] && c->vib_rate && u8 > c->vib_from << 8) {   /* vibrato fades in over u 0.21 from vib_from */
+        int32_t fade = clamp((u8 - (c->vib_from << 8)) / 54, 0, 256);
+        ap += (uint32_t)c->vib_rate << 16;              /* MEOW 6.5 Hz (309), YOWL 4.2 Hz (200): 16-bit phase in ph[2] 16..31 */
         pst += (((sine_i(ap & 0xFFFF0000u) * p[P_E4]) >> 15) * fade * 16 / 127) >> 8;   /* +-1 semitone */
     }
     {
@@ -253,10 +284,8 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         gq = (gq * rough) >> 15;
     og = 11000;
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - v->pitch_cur) / 4)) >> 16);   /* 1.5 dB / oct (as VOICE) */
-    if (c->breath) {                                    /* PURR: the breath, 1.25 Hz (16-bit phase in ph[2] 16..31) */
-        ap += 59u << 16;
-        og = (og * PURR_GAIN * (256 - ((c->breath * (32768 - sine_i(ap & 0xFFFF0000u))) >> 16))) >> 8;
-    }
+    if (c == &PURR_CALL)
+        og *= PURR_GAIN;
     ogk = og * (1 + (buzz >> 11));                      /* the shelf: k = 1 .. 7.2 (+6 dB / oct above ~1 kHz) */
     ogb = og;                                           /* the bypass: the pulse itself, for the band above F4 */
     if (!c->voiced) {   /* HISS: breath only, at the level of the voice; ROUGH: grains at the key's rate */
@@ -268,7 +297,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         rough = p[P_E6] * 250;
         gq = 32768 + (((int8_t)(ap >> 8) * rough) >> 7);
     } else {   /* both are a cat's (F0 400 .. 1000 Hz): below C4 they fade out (none at C2), or a bass is a buzz saw */
-        int32_t kt = c->breath ? 0 : clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);   /* (PURR: never) */
+        int32_t kt = c == &PURR_CALL ? 0 : clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);   /* (PURR: never) */
         ogk = ogk / (24 * 16) * kt;
         ogb = ogb / (24 * 16) * kt;
     }
@@ -330,11 +359,24 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     v->s[6] = y7;
 }
 
+/* the order is the editor's preset numbers and the stores': append only. ENV: unused (the call is the level).
+ * PAT(14): MIAU (engines.c PATTERNS) */
 static const preset_t MEOW_PRESETS[] = {
     /* MODE SIZE LEN BEND | WOW BRTH ROUGH RAND */
-    {"MEOW LEAD", {MEOW_M, 64, 84, 6, 30, 45, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(4)},
-    {"HISS HAT", {MEOW_HISS, 64, 10, 0, 0, 0, 20, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 10, 15), PAT(12)},
+    {"MEOW LEAD", {MEOW_M, 64, 84, 6, 30, 45, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(14)},
+    {"HISS HAT", {MEOW_HISS, 64, 14, 0, 0, 0, 20, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 12), PAT(0)},
+    {"PURR BASS", {MEOW_PURR, 64, 40, 0, 0, 10, 0, 10}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 5), PAT(2)},
+    {"MRRP", {MEOW_MRRP, 64, 60, 5, 0, 30, 10, 40}, {0, 64, 127, 40}, 0, 0, FX(0, 10, 20, 25), PAT(6)},
+    {"YOWL", {MEOW_YOWL, 90, 110, 9, 80, 60, 40, 30}, {0, 64, 127, 40}, 0, 1, FX(0, 30, 35, 80), PAT(5)},
+    {"MEW", {MEOW_MEW, 40, 50, 4, 20, 40, 5, 40}, {0, 64, 127, 40}, 0, 0, FX(0, 15, 30, 35), PAT(7)},
+    {"KITTEN", {MEOW_MEW, 0, 40, 5, 40, 50, 0, 50}, {0, 64, 127, 40}, 0, 0, FX(0, 15, 30, 35), PAT(3)},
+    {"TOMCAT", {MEOW_M, 127, 95, 7, 40, 55, 45, 30}, {0, 64, 127, 40}, 0, 1, FX(0, 15, 25, 35), PAT(4)},
+    {"PURR SUB", {MEOW_PURR, 80, 127, 0, 0, 15, 0, 5}, {0, 64, 127, 40}, 0, 1, FX(0, 0, 0, 0), PAT(8)},
+    {"HISS OPEN", {MEOW_HISS, 64, 60, 0, 0, 0, 30, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 10, 20), PAT(0)},
 };
+#define MEOW_P_LEAD 0u
+#define MEOW_P_HISS 1u
+#define MEOW_P_PURR 2u
 
 static const engine_t ENG_MEOW = {
     .name = "MEOW",

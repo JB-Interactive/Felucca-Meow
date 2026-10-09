@@ -1005,7 +1005,7 @@ static void track_defaults_steps(track_t *t)
         step_clear(&t->step[i]);
 }
 
-/* SAVE > PHRASES: the factory patterns (PATTERNS[], "01".."13"), then the used user presets that hold
+/* SAVE > PHRASES: the factory patterns (PATTERNS[], "01".."14"), then the used user presets that hold
  * one ("U07"): list index n. Loading one replaces the track's steps 1..16 (the rest cleared) and LEN;
  * a user preset's pattern brings its stored LEN (at most 16), DIV, SWING and GATE too. The notes are
  * loaded as they are: the patterns are written for the register of their kind of sound, DRUM and

@@ -113,6 +113,9 @@
 #                   Felucca's targets, the controls' directions, no clipping, DC, retriggers, the hat choke, the
 #                   kick on a small speaker; the DRUM engine (src/eng_drum.c): its key map, the 8 lanes together,
 #                   one hit per lane, the choke between lanes; the cost per voice; demos in build/drum_demo/.
+# MEOW (tests/meow_test.c, MEOW-1): the cat engine (src/eng_meow.c): engine 14, MEOW-1's power-on parts, the MIAU pattern,
+#                   every preset sounds below full scale and ends by itself, the calls' lengths, MEOW's arc peaking at the
+#                   key, PURR's pulses at the key, MRRP's 25 Hz trill, LEN 127 holding while the key is held.
 # NOISE (tests/noise_test.c): the engine (src/eng_noise.c): COLR's slope (white, pink, brown), the filter and the
 #                   register clock following the key, META periodic at the key, no DC, no clipping at the
 #                   corners, a note from silence the same twice, the cost per voice; demos in build/noise_demo/.
@@ -143,7 +146,10 @@ export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
 cd "$(dirname "$0")/.."
 OUT=build/host
 mkdir -p "$OUT"
-CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
+# FELUCCA_TRK_DEF=1: the power-on parts Felucca's (ANALOG ACID, FM6 PAD, LOFI PULSE LD, DRUM KIT), the fixtures the
+# tests below were written against; MEOW-1's own (PURR BASS, MEOW LEAD, HISS HAT, DRUM KIT): tests/meow_test.c
+CC0="${CC:-cc} -O1 -Wall -Wno-unused-function"
+CC="$CC0 -DFELUCCA_TRK_DEF=1"
 fail=0
 run() { echo "== $1"; shift; "$@" || fail=1; }
 
@@ -300,6 +306,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/noise_test" tests/noise_test.c -lm
     mkdir -p build/noise_demo
     run "NOISE: colour slopes, key-tracked filter and clock, META period, DC, clipping, retrigger, cost, demos" "$OUT/noise_test" build/noise_demo
+    $CC0 -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/meow_test" tests/meow_test.c -lm
+    run "MEOW (MEOW-1): engine 14, power-on parts, MIAU, every preset sounds and ends, call lengths, pitch at the key, PURR, the trill, HOLD" "$OUT/meow_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6_test" tests/fm6_test.c -lm
     mkdir -p build/fm6_demo
     run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, cost, demos" "$OUT/fm6_test" build/fm6_demo
@@ -345,7 +353,7 @@ elif ! san_ok; then
 else
     mkdir -p "$OUT/asan"
     A="$OUT/asan"
-    SCC="${CC%% *} $SAN -Ibuild/gen -Ifirmware/src"
+    SCC="${CC%% *} $SAN -DFELUCCA_TRK_DEF=1 -Ibuild/gen -Ifirmware/src"
     export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}"
     $SCC -o "$A/ldr_test" tests/ldr_test.c
     run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc

@@ -171,12 +171,24 @@ static const struct {
     /* 16ths up a C minor arpeggio, twice: the line the ARP presets (RAVE, ARP 8BIT, ARP LEAD) suggest
      * now that the arpeggiator is the track's and a preset no longer switches it on */
     {"ARP", {48, 51, 55, 60, 63, 67, 72, 75, 48, 51, 55, 60, 63, 67, 72, 75},       /* 13 */
-     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}},
+     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}},    /* MEOW (eng_meow.c): a call per note, room for it to sound (C minor, around C5) */
+    {"MIAU", {72, 0, 0, 75, 0, 77, 0, 79, 0, 0, 77, 0, 75, 0, 72, 0},              /* 14 */
+     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}},
 };
 #undef T_
 #define NPATTERNS (sizeof PATTERNS / sizeof PATTERNS[0])
 
-/* the parts at power-on (engine, preset, PATTERNS[n - 1] in the sequencer, 0 = empty: all are): bass, pad, lead, drums */
-static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}}; /* ANALOG ACID,
-                                                                       * FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT */
+/* the parts at power-on (engine, preset, PATTERNS[n - 1] in the sequencer, 0 = empty: all are). MEOW-1: PURR BASS,
+ * MEOW LEAD, HISS HAT, DRUM KIT. FELUCCA_TRK_DEF=1: Felucca's (ANALOG ACID, FM6 PAD (was DIGITAL PAD), LOFI PULSE LD,
+ * DRUM KIT): the host tests that use the power-on parts as their fixtures are built with it (tests/run_tests.sh);
+ * tests/meow_test.c checks MEOW-1's */
+#ifndef FELUCCA_TRK_DEF
+#define FELUCCA_TRK_DEF 0
+#endif
+#if FELUCCA_TRK_DEF
+static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}};
+#else
+static const uint8_t TRK_DEF[NPART][3] = {{ENGI_MEOW, MEOW_P_PURR, 0}, {ENGI_MEOW, MEOW_P_LEAD, 0},
+                                         {ENGI_MEOW, MEOW_P_HISS, 0}, {ENGI_DRUM, 0, 0}};
+#endif
 static uint32_t trk_def_engine(uint32_t i) { return TRK_DEF[i % NPART][0]; }
