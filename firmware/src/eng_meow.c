@@ -21,7 +21,7 @@
  * Wide bands (the measured spectrum has no sharp formant peaks), a bright pulse, a +6 dB / oct shelf
  * and the bypass give the flat spectrum; each glottal period draws its own length and level.
  *
- *   MODE    the call: MEOW, HISS (MEW MRRP YOWL PURR play MEOW for now)
+ *   MODE    the call: MEOW, PURR, HISS (MEW MRRP YOWL play MEOW for now)
  *   SIZE    the tract: x1.33 .. x0.75 of the formants (kitten .. big tom)
  *   LEN     0.15 .. 1.5 s; at 127 the call holds at its peak while the key is held, then closes
  *   BEND    the arc, 0 .. 12 semitones: the start ~BEND / 2 below the key, the end ~0.7 BEND below
@@ -92,7 +92,17 @@ static const mpt_t HISS_AMP[] = {{0, 0}, {3, 256}, {18, 190}, {60, 100}, {140, 4
 static const mpt_t HISS_JAW[] = {{0, 256}, {255, 120}};
 static const mpt_t MEOW_ZERO[] = {{0, 0}, {255, 0}};
 
-/* a call: its curves, its mouth, voiced or breath only, LEN's time x dur / 16, formant key tracking / 127 */
+/* PURR: the larynx pulses at ~28 Hz, each pulse a click (CSDB "Resting", 5 purrs: 28.3 .. 28.7 Hz, half-height
+ * width ~5 % of the period), louder and softer with the breath (a cycle of ~0.8 s, 8 .. 12 dB); dark: the most
+ * at 50 .. 100 Hz, -10 dB at 300 .. 600 Hz, -15 .. -25 dB at 1 .. 2 kHz, -40 dB above. A purr is a bass by
+ * nature: the key sets the pulse rate (C1 33 Hz: a purr, C2 .. C3: a purring bass), the mouth stays shut */
+static const uint16_t PURR_F0[4] = {180, 550, 1300, 1800}, PURR_FJ[4] = {0, 0, 0, 0};
+static const uint16_t PURR_BW[4] = {300, 400, 200, 250};
+#define PURR_GAIN 40                                    /* clicks through a shut mouth: little energy */
+static const mpt_t PURR_AMP[] = {{0, 0}, {12, 256}, {225, 230}, {255, 0}};
+
+/* a call: its curves, its mouth, voiced or breath only, LEN's time x dur / 16, formant key tracking / 127,
+ * its own open quotient (Q16, 0: from the level) and breathing (depth of a 1.25 Hz swell, Q8 of the level) */
 typedef struct { const mpt_t *p; uint8_t n; } mcv_t;
 #define MCV(a) {a, NELEM(a)}
 typedef struct {
@@ -100,14 +110,18 @@ typedef struct {
     const uint16_t *f0, *fj, *bw;
     const uint8_t *rf;
     uint8_t voiced, dur, folow;
+    uint16_t oq;
+    uint8_t breath;
 } mcall_t;
 static const mcall_t MEOW_CALL = {MCV(MEOW_AMP), MCV(MEOW_JAW), MCV(MEOW_ROUND), MCV(MEOW_NASAL), MCV(MEOW_PITCH),
-                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 16, MEOW_FOLOW};
+                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 16, MEOW_FOLOW, 0, 0};
 static const mcall_t HISS_CALL = {MCV(HISS_AMP), MCV(HISS_JAW), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO),
-                                  HISS_F0, HISS_FJ, HISS_BW, HISS_RND, 0, 4, 64};
-static const mcall_t *meow_call(const int16_t *p)    /* MEW MRRP YOWL PURR: MEOW for now */
+                                  HISS_F0, HISS_FJ, HISS_BW, HISS_RND, 0, 4, 64, 0, 0};
+static const mcall_t PURR_CALL = {MCV(PURR_AMP), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO),
+                                  PURR_F0, PURR_FJ, PURR_BW, HISS_RND, 1, 16, 0, 800, 180};
+static const mcall_t *meow_call(const int16_t *p)    /* MEW MRRP YOWL: MEOW for now */
 {
-    return p[P_E0] == MEOW_HISS ? &HISS_CALL : &MEOW_CALL;
+    return p[P_E0] == MEOW_HISS ? &HISS_CALL : p[P_E0] == MEOW_PURR ? &PURR_CALL : &MEOW_CALL;
 }
 #define MC(c, k, u8) mcurve((c)->k.p, (c)->k.n, (u8))
 
@@ -220,7 +234,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* source: brighter as the call gets louder ([m] dark, [a] open), + SHP, + velocity */
     lvl = MC(c, amp, u8);                               /* Q8 */
     buzz = clamp(((100 + ((lvl * 20) >> 8)) << 8) + m->shape - (64 << 8) + (v->vel - 96) * 40, 0, 127 << 8);
-    oq = 58982 - ((buzz * 284) >> 8);                   /* open quotient Q16: 0.90 .. 0.35 */
+    oq = c->oq ? c->oq : 58982 - ((buzz * 284) >> 8);  /* open quotient Q16: 0.90 .. 0.35 */
     te = (uint32_t)oq << 16;
     tp = (te >> 8) * 166u;
     rp = (1u << 30) / ((tp >> 16) | 1u);
@@ -239,6 +253,10 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         gq = (gq * rough) >> 15;
     og = 11000;
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - v->pitch_cur) / 4)) >> 16);   /* 1.5 dB / oct (as VOICE) */
+    if (c->breath) {                                    /* PURR: the breath, 1.25 Hz (16-bit phase in ph[2] 16..31) */
+        ap += 59u << 16;
+        og = (og * PURR_GAIN * (256 - ((c->breath * (32768 - sine_i(ap & 0xFFFF0000u))) >> 16))) >> 8;
+    }
     ogk = og * (1 + (buzz >> 11));                      /* the shelf: k = 1 .. 7.2 (+6 dB / oct above ~1 kHz) */
     ogb = og;                                           /* the bypass: the pulse itself, for the band above F4 */
     if (!c->voiced) {   /* HISS: breath only, at the level of the voice; ROUGH: grains at the key's rate */
@@ -250,7 +268,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         rough = p[P_E6] * 250;
         gq = 32768 + (((int8_t)(ap >> 8) * rough) >> 7);
     } else {   /* both are a cat's (F0 400 .. 1000 Hz): below C4 they fade out (none at C2), or a bass is a buzz saw */
-        int32_t kt = clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);
+        int32_t kt = c->breath ? 0 : clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);   /* (PURR: never) */
         ogk = ogk / (24 * 16) * kt;
         ogb = ogb / (24 * 16) * kt;
     }
