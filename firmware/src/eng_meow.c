@@ -21,7 +21,7 @@
  * Wide bands (the measured spectrum has no sharp formant peaks), a bright pulse, a +6 dB / oct shelf
  * and the bypass give the flat spectrum; each glottal period draws its own length and level.
  *
- *   MODE    the call (MEOW; MEW MRRP YOWL PURR HISS play MEOW for now)
+ *   MODE    the call: MEOW, HISS (MEW MRRP YOWL PURR play MEOW for now)
  *   SIZE    the tract: x1.33 .. x0.75 of the formants (kitten .. big tom)
  *   LEN     0.15 .. 1.5 s; at 127 the call holds at its peak while the key is held, then closes
  *   BEND    the arc, 0 .. 12 semitones: the start ~BEND / 2 below the key, the end ~0.7 BEND below
@@ -38,6 +38,9 @@
 #define MEOW_U1 (1 << 20)                               /* u = 1: the call is over */
 #define MEOW_UMASK 0x001FFFFF
 #define MEOW_HOLD_U (MEOW_U1 * 45 / 100)                /* LEN 127: held here (the arc's peak) */
+#define HISS_GN 20000                                   /* HISS: the breath's level, the shelf (x og), the bypass (/ 16) */
+#define HISS_K 3
+#define HISS_B 3
 #define MEOW_FOLOW 16                                   /* formant key tracking / 127: the mouth hardly moves with F0 */
 
 enum { MEOW_M, MEOW_MEW, MEOW_MRRP, MEOW_YOWL, MEOW_PURR, MEOW_HISS, MEOW_NMODE };
@@ -76,6 +79,38 @@ static const mpt_t MEOW_ROUND[] = {{0, 0}, {120, 0}, {220, 256}, {255, 256}};
 static const mpt_t MEOW_NASAL[] = {{0, 256}, {8, 200}, {24, 0}, {255, 0}};
 static const mpt_t MEOW_PITCH[] = {{0, -100}, {13, -120}, {70, 0}, {130, -50}, {200, -110}, {255, -180}};
 
+/* HISS: no voice, breath forced through the open mouth. Fitted to a recorded hiss (Wikimedia Commons, "Cat
+ * hissing - Zabuhailo.wav", CC0, 96 kHz; high-passed at 300 Hz against the handling rumble): the hiss (0.6 s)
+ * has resonances near 3.2 and 6 kHz (the 8 cm tube's 3.3 and 5.5 kHz), -8 .. -12 dB/Hz at 1 .. 4 kHz re the
+ * band below 800 Hz, -22 dB above 10 kHz; the spit before it rises in 2 ms, holds ~10 ms, is -10 .. -15 dB
+ * after 15 ms and -20 dB at ~80 ms. A note is a spit (a closed hat) at short LEN, a hiss (an open one) at
+ * long LEN; the key colours it (strong formant key tracking), ROUGH breaks the breath into grains */
+static const uint16_t HISS_F0[4] = {800, 3200, 6000, 8000}, HISS_FJ[4] = {200, 200, 300, 0};
+static const uint8_t HISS_RND[4] = {0, 0, 0, 0};
+static const uint16_t HISS_BW[4] = {700, 1200, 350, 1000};
+static const mpt_t HISS_AMP[] = {{0, 0}, {3, 256}, {18, 190}, {60, 100}, {140, 40}, {255, 0}};
+static const mpt_t HISS_JAW[] = {{0, 256}, {255, 120}};
+static const mpt_t MEOW_ZERO[] = {{0, 0}, {255, 0}};
+
+/* a call: its curves, its mouth, voiced or breath only, LEN's time x dur / 16, formant key tracking / 127 */
+typedef struct { const mpt_t *p; uint8_t n; } mcv_t;
+#define MCV(a) {a, NELEM(a)}
+typedef struct {
+    mcv_t amp, jaw, rnd, nas, pitch;
+    const uint16_t *f0, *fj, *bw;
+    const uint8_t *rf;
+    uint8_t voiced, dur, folow;
+} mcall_t;
+static const mcall_t MEOW_CALL = {MCV(MEOW_AMP), MCV(MEOW_JAW), MCV(MEOW_ROUND), MCV(MEOW_NASAL), MCV(MEOW_PITCH),
+                                  MEOW_F0, MEOW_FJ, MEOW_BW, MEOW_RND, 1, 16, MEOW_FOLOW};
+static const mcall_t HISS_CALL = {MCV(HISS_AMP), MCV(HISS_JAW), MCV(MEOW_ZERO), MCV(MEOW_ZERO), MCV(MEOW_ZERO),
+                                  HISS_F0, HISS_FJ, HISS_BW, HISS_RND, 0, 4, 64};
+static const mcall_t *meow_call(const int16_t *p)    /* MEW MRRP YOWL PURR: MEOW for now */
+{
+    return p[P_E0] == MEOW_HISS ? &HISS_CALL : &MEOW_CALL;
+}
+#define MC(c, k, u8) mcurve((c)->k.p, (c)->k.n, (u8))
+
 /* the note's random value k (-128 .. 127, three of them from 11 bits), scaled by RAND */
 static int32_t meow_rnd(const voice_t *v, const int16_t *p, uint32_t k)
 {
@@ -100,6 +135,7 @@ static void meow_note_on(track_t *t, voice_t *v)
 static int32_t meow_amp(track_t *t, voice_t *v, int32_t adsr)
 {
     const int16_t *p = t->p;
+    const mcall_t *c = meow_call(p);
     uint32_t u = (uint32_t)v->s[7] & MEOW_UMASK, inc;
     int32_t len = p[P_E2];
     (void)adsr;
@@ -119,17 +155,19 @@ static int32_t meow_amp(track_t *t, voice_t *v, int32_t adsr)
     }
     /* 150 ms * 10^(len / 126) (x 2^(st16 / 192): st16 = len * 5.06), RAND +-30 % */
     inc = (5073u << 16) / fmt_ratio(len * 5 + len / 16 + ((meow_rnd(v, p, 0) * 73) >> 7));   /* Q20 per tick */
+    inc = inc * 16u / c->dur;
     u += inc;
     if (u > (uint32_t)MEOW_U1)
         u = MEOW_U1;
     v->s[7] = (int32_t)(((uint32_t)v->s[7] & ~(uint32_t)MEOW_UMASK) | u);
 level:
-    return (mcurve(MEOW_AMP, NELEM(MEOW_AMP), (int32_t)(u >> 4)) * 32767) >> 8;
+    return (MC(c, amp, (int32_t)(u >> 4)) * 32767) >> 8;
 }
 
 static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
+    const mcall_t *c = meow_call(p);
     fres_t r1, r2, r3, r4;
     int32_t f[4], b[4], j, buzz, oq, gv, ogb, gn, og, ogk, jaw, rnd, nas, bend, pst, lvl, rough, ja, gq, incj;
     uint32_t inc, incq, i, te, tp, rp, rn, ratio, f0, ph = v->ph[0], ap = v->ph[2], par = ap & 1u;
@@ -140,7 +178,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* pitch: the arc (BEND, RAND +-40 %) and WOW in the second half */
     bend = p[P_E3] * 16;
     bend += (bend * meow_rnd(v, p, 1) * 102) >> 15;
-    pst = (mcurve(MEOW_PITCH, NELEM(MEOW_PITCH), u8) * bend) >> 8;
+    pst = (MC(c, pitch, u8) * bend) >> 8;
     if (p[P_E4] && u8 > 100 << 8) {                     /* vibrato fades in from u 0.39 to 0.6 */
         int32_t fade = clamp((u8 - (100 << 8)) / 54, 0, 256);
         ap += 309u << 16;                               /* 6.5 Hz per control tick (16-bit phase in ph[2] 16..31) */
@@ -152,27 +190,27 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     }
 
     /* mouth: jaw, rounding, nasality -> F1..F3, times SIZE (RAND +-2 semitones) and key tracking */
-    jaw = mcurve(MEOW_JAW, NELEM(MEOW_JAW), u8);
-    rnd = mcurve(MEOW_ROUND, NELEM(MEOW_ROUND), u8);
-    nas = mcurve(MEOW_NASAL, NELEM(MEOW_NASAL), u8);
+    jaw = MC(c, jaw, u8);
+    rnd = MC(c, rnd, u8);
+    nas = MC(c, nas, u8);
     ratio = fmt_ratio((64 - p[P_E1]) * 5 / 4 + ((meow_rnd(v, p, 2) * 32) >> 7) +   /* +-5 st: x1.33 .. x0.75 */
-                      ((MEOW_FOLOW * (v->pitch_cur - 72 * 16) * 516) >> 16) + (m->cutoff >> 8));
+                      ((c->folow * (v->pitch_cur - 72 * 16) * 516) >> 16) + (m->cutoff >> 8));
     f0 = (uint32_t)(((uint64_t)inc * 705600u) >> 32);   /* F0 in Hz * 16 */
     for (j = 0; j < 4; j++) {
-        int32_t ff = (MEOW_F0[j] << 4) + ((MEOW_FJ[j] * jaw) >> 4), bb;   /* Hz * 16 */
-        ff -= (((ff * MEOW_RND[j]) >> 8) * rnd) >> 8;
+        int32_t ff = (c->f0[j] << 4) + ((c->fj[j] * jaw) >> 4), bb;   /* Hz * 16 */
+        ff -= (((ff * c->rf[j]) >> 8) * rnd) >> 8;
         if (j == 0)
             ff += (((MEOW_NF1 << 4) - ff) * nas) >> 8;
-        bb = MEOW_BW[j] << 4;
+        bb = c->bw[j] << 4;
         bb += (bb * nas * (j ? 3 : 1)) >> 8;            /* [m]: the nose damps the bands, F2 / F3 most */
         ff = (int32_t)(((int64_t)ff * ratio) >> 16);
         bb = (int32_t)(((int64_t)bb * ratio) >> 16);
-        if (j == 0 && (uint32_t)ff < f0 + (f0 >> 4) && ff > 0) {   /* F1 follows a high F0 (as VOICE) */
+        if (j == 0 && c->voiced && (uint32_t)ff < f0 + (f0 >> 4) && ff > 0) {   /* F1 follows a high F0 (as VOICE) */
             bb = (int32_t)(((int64_t)bb * (int32_t)(f0 + (f0 >> 4))) / ff);
             ff = (int32_t)(f0 + (f0 >> 4));
         }
-        f[j] = clamp(ff, 60 * 16, 9000 * 16);
-        b[j] = clamp(bb, 20 * 16, 1500 * 16);
+        f[j] = clamp(ff, 60 * 16, 12000 * 16);
+        b[j] = clamp(bb, 20 * 16, 2800 * 16);
     }
     fres_coef(&r1, (uint32_t)f[0], (uint32_t)b[0]);
     fres_coef(&r2, (uint32_t)f[1], (uint32_t)b[1]);
@@ -180,7 +218,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     fres_coef(&r4, (uint32_t)f[3], (uint32_t)b[3]);
 
     /* source: brighter as the call gets louder ([m] dark, [a] open), + SHP, + velocity */
-    lvl = mcurve(MEOW_AMP, NELEM(MEOW_AMP), u8);        /* Q8 */
+    lvl = MC(c, amp, u8);                               /* Q8 */
     buzz = clamp(((100 + ((lvl * 20) >> 8)) << 8) + m->shape - (64 << 8) + (v->vel - 96) * 40, 0, 127 << 8);
     oq = 58982 - ((buzz * 284) >> 8);                   /* open quotient Q16: 0.90 .. 0.35 */
     te = (uint32_t)oq << 16;
@@ -203,7 +241,15 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - v->pitch_cur) / 4)) >> 16);   /* 1.5 dB / oct (as VOICE) */
     ogk = og * (1 + (buzz >> 11));                      /* the shelf: k = 1 .. 7.2 (+6 dB / oct above ~1 kHz) */
     ogb = og;                                           /* the bypass: the pulse itself, for the band above F4 */
-    {   /* both are a cat's (F0 400 .. 1000 Hz): below C4 they fade out (none at C2), or a bass is a buzz saw */
+    if (!c->voiced) {   /* HISS: breath only, at the level of the voice; ROUGH: grains at the key's rate */
+        gv = 0;
+        gn = HISS_GN;
+        og <<= 2;                                       /* +12 dB: breath alone, without a voice's peaks */
+        ogk = og * HISS_K;
+        ogb = og * HISS_B / 16;
+        rough = p[P_E6] * 250;
+        gq = 32768 + (((int8_t)(ap >> 8) * rough) >> 7);
+    } else {   /* both are a cat's (F0 400 .. 1000 Hz): below C4 they fade out (none at C2), or a bass is a buzz saw */
         int32_t kt = clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);
         ogk = ogk / (24 * 16) * kt;
         ogb = ogb / (24 * 16) * kt;
@@ -211,18 +257,22 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 
     for (i = 0; i < n; i++) {
         int32_t e, x, a, s;
-        if (ph < tp)
-            e = (sine_i(((ph >> 16) * rp) << 1) * 17644) >> 15;
-        else if (ph < te)
-            e = -sine_i(((ph - tp) >> 16) * rn);
-        else
-            e = 0;
-        e += blep(ph - te, incq) >> 1;
-        e = (e * gq) >> 15;
-        x = (e * gv) >> 15;
-        if (gn) {
-            int32_t nz = (((int32_t)(noise32(&nst) >> 16) - 32768) * gn) >> 15;
-            x += ph < te ? nz : nz >> 1;
+        if (gv) {
+            if (ph < tp)
+                e = (sine_i(((ph >> 16) * rp) << 1) * 17644) >> 15;
+            else if (ph < te)
+                e = -sine_i(((ph - tp) >> 16) * rn);
+            else
+                e = 0;
+            e += blep(ph - te, incq) >> 1;
+            e = (e * gq) >> 15;
+            x = (e * gv) >> 15;
+            if (gn) {
+                int32_t nz = (((int32_t)(noise32(&nst) >> 16) - 32768) * gn) >> 15;
+                x += ph < te ? nz : nz >> 1;
+            }
+        } else {                                        /* HISS */
+            x = (((((int32_t)(noise32(&nst) >> 16) - 32768) * gn) >> 15) * gq) >> 15;
         }
         a = (int32_t)(((int64_t)r1.a * (x << 6) + (int64_t)r1.b * y1 + (int64_t)r1.c * y2 + (1 << 29)) >> 30);
         y2 = y1;
@@ -242,8 +292,8 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
             ap = (ap & 0xFFFF0000u) | (noise32(&nst) & 0xFFFEu) | par;
             incj = (((int32_t)(inc >> 8) * (int8_t)(ap & 0xFEu)) >> 7) * ja >> 8;
             incq = inc + (uint32_t)incj;
-            gq = 32768 + (((int8_t)(ap >> 8) * 3277) >> 7);
-            if (par)
+            gq = 32768 + (((int8_t)(ap >> 8) * (gv ? 3277 : rough)) >> 7);
+            if (par && gv)
                 gq = (gq * rough) >> 15;
         }
         ph += incq;
@@ -265,6 +315,7 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 static const preset_t MEOW_PRESETS[] = {
     /* MODE SIZE LEN BEND | WOW BRTH ROUGH RAND */
     {"MEOW LEAD", {MEOW_M, 64, 84, 6, 30, 45, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(4)},
+    {"HISS HAT", {MEOW_HISS, 64, 10, 0, 0, 0, 20, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 10, 15), PAT(12)},
 };
 
 static const engine_t ENG_MEOW = {
