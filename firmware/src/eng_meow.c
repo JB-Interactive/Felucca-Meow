@@ -98,7 +98,7 @@ static const mpt_t MEOW_ZERO[] = {{0, 0}, {255, 0}};
  * nature: the key sets the pulse rate (C1 33 Hz: a purr, C2 .. C3: a purring bass), the mouth stays shut */
 static const uint16_t PURR_F0[4] = {180, 550, 1300, 1800}, PURR_FJ[4] = {0, 0, 0, 0};
 static const uint16_t PURR_BW[4] = {300, 400, 200, 250};
-#define PURR_GAIN 40                                    /* clicks through a shut mouth: little energy */
+#define PURR_GAIN 90                                    /* clicks through a shut mouth: little energy */
 static const mpt_t PURR_AMP[] = {{0, 0}, {12, 256}, {225, 230}, {255, 0}};
 
 /* MEW: McKinley's high mew ([i] .. [u], after Schoetz & van de Weijer 2014): short, the mouth barely open,
