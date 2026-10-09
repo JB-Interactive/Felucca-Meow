@@ -22,6 +22,25 @@
 #if FELUCCA_SLICE
 #include "eng_slice.c"
 #endif
+#include "eng_meow.c"            /* MEOW: cat calls (VOICE's source and resonators) */
+#if !FELUCCA_SLICE
+/* engine 13 without SLICE: never offered (eng_ok); a stored SLICE sound plays silence */
+static void slice_gone_note_on(track_t *t, voice_t *v) { (void)t; (void)v; }
+static void slice_gone_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+{
+    (void)t; (void)v; (void)out; (void)n; (void)m;
+}
+#define SLC_GONE_P {"-", F_INT, 0, 0, 0, 0, 0}
+static const engine_t ENG_SLICE_GONE = {
+    .name = "-",
+    .page_title = {"-", "-"},
+    .edit = {SLC_GONE_P, SLC_GONE_P, SLC_GONE_P, SLC_GONE_P, SLC_GONE_P, SLC_GONE_P, SLC_GONE_P, SLC_GONE_P},
+    .note_on = slice_gone_note_on,
+    .render = slice_gone_render,
+    .knob = {P_E4, P_E5, P_E6, P_REL},
+};
+#undef SLC_GONE_P
+#endif
 
 /* the editor protocol, user presets and projects store these indices: append, never reorder */
 static const engine_t *const ENGINES[NENGINES] = {
@@ -43,8 +62,11 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_NOISE,                  /* 11 */
     &ENG_FM6,                    /* 12 (ENGI_FM6) */
 #if FELUCCA_SLICE
-    &ENG_SLICE,                  /* 13 (FELUCCA_SLICE=0 builds without it) */
+    &ENG_SLICE,                  /* 13 (ENGI_SLICE) */
+#else
+    &ENG_SLICE_GONE,             /* 13: reserved (FELUCCA_SLICE=0 builds without SLICE) */
 #endif
+    &ENG_MEOW,                   /* 14 (ENGI_MEOW) */
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -80,7 +102,9 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 #if FELUCCA_FM4
     1,                           /* DIGITAL */
 #endif
-    2, 3, 4, 5, 6, 7, 8, 9,      /* PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS */
+    2, 3, 4, 5,                  /* PHASE LOFI SAMPLE VOICE */
+    14,                          /* MEOW */
+    6, 7, 8, 9,                  /* TRIO WHEEL GRAIN PHYS */
     11,                          /* NOISE */
 #if FELUCCA_SLICE
     13,                          /* SLICE */
@@ -90,7 +114,10 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL); }
+static int eng_ok(uint32_t e)
+{
+    return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE);
+}
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
