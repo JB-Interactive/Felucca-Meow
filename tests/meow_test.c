@@ -141,8 +141,11 @@ int main(void)
           TRK_DEF[0][0] == ENGI_MEOW && TRK_DEF[0][1] == preset_of("PURR BASS") &&
           TRK_DEF[1][0] == ENGI_MEOW && TRK_DEF[1][1] == preset_of("MEOW LEAD") &&
           TRK_DEF[2][0] == ENGI_MEOW && TRK_DEF[2][1] == preset_of("HISS HAT") && TRK_DEF[3][0] == ENGI_DRUM);
-    check("factory pattern 14 is MIAU; MEOW LEAD suggests it", NPATTERNS == 14u && !strcmp(PATTERNS[13].name, "MIAU") &&
+    check("factory pattern 14 is MIAU; MEOW LEAD suggests it", NPATTERNS == 17u && !strcmp(PATTERNS[13].name, "MIAU") &&
           ENG_MEOW.presets[preset_of("MEOW LEAD")].pat == 14u);
+    check("the demo at power-on: PURR, MIAU, HISS, KATZ in the four sequencers (TRK_DEF)",
+          TRK_DEF[0][2] == 15u && !strcmp(PATTERNS[14].name, "PURR") && TRK_DEF[1][2] == 14u &&
+          TRK_DEF[2][2] == 16u && !strcmp(PATTERNS[15].name, "HISS") && TRK_DEF[3][2] == 17u && !strcmp(PATTERNS[16].name, "KATZ"));
     for (k = 0; k < ENG_MEOW.npresets; k++)
         if (ENG_MEOW.presets[k].pat > NPATTERNS)
             break;

@@ -28,8 +28,12 @@ held), **BEND** (the pitch arc, 0 … 12 semitones), **WOW** (vibrato), **BRTH**
 subharmonics, jitter), **RAND** (every call a little different). HOME's knobs: SIZE, LEN, BEND, ROUGH. MIDI CC74 /
 CC71: SIZE / ROUGH. A call plays to its end however short the key or step (the track's ADSR is not used).
 
-Presets: MEOW LEAD, HISS HAT, PURR BASS, MRRP, YOWL, MEW, KITTEN, TOMCAT, PURR SUB, HISS OPEN. Factory pattern 14:
-**MIAU**. At power-on: track 1 **PURR BASS**, 2 **MEOW LEAD**, 3 **HISS HAT**, 4 **DRUM KIT**.
+Presets: MEOW LEAD, HISS HAT, PURR BASS, MRRP, YOWL, MEW, KITTEN, TOMCAT, PURR SUB, HISS OPEN. Factory patterns
+14–17: **MIAU** (the lead), **PURR** (the bass), **HISS** (hats), **KATZ** (kick, snare, clap).
+
+**The demo:** a fresh MEOW-1 starts with track 1 **PURR BASS** playing PURR, 2 **MEOW LEAD** playing MIAU, 3 **HISS HAT**
+playing HISS and 4 **DRUM KIT** playing KATZ: press PLAY. (With MENU > RESTORE LAST the FM-1 then comes back as you
+left it; SAVE > PHRASES loads the patterns again.)
 
 ## How the sound was made
 

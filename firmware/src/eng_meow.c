@@ -360,19 +360,19 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 }
 
 /* the order is the editor's preset numbers and the stores': append only. ENV: unused (the call is the level).
- * PAT(14): MIAU (engines.c PATTERNS) */
+ * PAT(14) .. PAT(16): MIAU, PURR, HISS (engines.c PATTERNS) */
 static const preset_t MEOW_PRESETS[] = {
     /* MODE SIZE LEN BEND | WOW BRTH ROUGH RAND */
     {"MEOW LEAD", {MEOW_M, 64, 84, 6, 30, 45, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(14)},
-    {"HISS HAT", {MEOW_HISS, 64, 14, 0, 0, 0, 20, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 12), PAT(0)},
-    {"PURR BASS", {MEOW_PURR, 64, 40, 0, 0, 10, 0, 10}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 5), PAT(2)},
+    {"HISS HAT", {MEOW_HISS, 64, 14, 0, 0, 0, 20, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 12), PAT(16)},
+    {"PURR BASS", {MEOW_PURR, 64, 40, 0, 0, 10, 0, 10}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 0, 5), PAT(15)},
     {"MRRP", {MEOW_MRRP, 64, 60, 5, 0, 30, 10, 40}, {0, 64, 127, 40}, 0, 0, FX(0, 10, 20, 25), PAT(6)},
     {"YOWL", {MEOW_YOWL, 90, 110, 9, 80, 60, 40, 30}, {0, 64, 127, 40}, 0, 1, FX(0, 30, 35, 80), PAT(5)},
     {"MEW", {MEOW_MEW, 40, 50, 4, 20, 40, 5, 40}, {0, 64, 127, 40}, 0, 0, FX(0, 15, 30, 35), PAT(7)},
     {"KITTEN", {MEOW_MEW, 0, 40, 5, 40, 50, 0, 50}, {0, 64, 127, 40}, 0, 0, FX(0, 15, 30, 35), PAT(3)},
     {"TOMCAT", {MEOW_M, 127, 95, 7, 40, 55, 45, 30}, {0, 64, 127, 40}, 0, 1, FX(0, 15, 25, 35), PAT(4)},
     {"PURR SUB", {MEOW_PURR, 80, 127, 0, 0, 15, 0, 5}, {0, 64, 127, 40}, 0, 1, FX(0, 0, 0, 0), PAT(8)},
-    {"HISS OPEN", {MEOW_HISS, 64, 60, 0, 0, 0, 30, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 10, 20), PAT(0)},
+    {"HISS OPEN", {MEOW_HISS, 64, 60, 0, 0, 0, 30, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 0, 10, 20), PAT(16)},
 };
 #define MEOW_P_LEAD 0u
 #define MEOW_P_HISS 1u
