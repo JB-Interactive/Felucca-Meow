@@ -203,6 +203,11 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - v->pitch_cur) / 4)) >> 16);   /* 1.5 dB / oct (as VOICE) */
     ogk = og * (1 + (buzz >> 11));                      /* the shelf: k = 1 .. 7.2 (+6 dB / oct above ~1 kHz) */
     ogb = og;                                           /* the bypass: the pulse itself, for the band above F4 */
+    {   /* both are a cat's (F0 400 .. 1000 Hz): below C4 they fade out (none at C2), or a bass is a buzz saw */
+        int32_t kt = clamp(v->pitch_cur - 36 * 16, 0, 24 * 16);
+        ogk = ogk / (24 * 16) * kt;
+        ogb = ogb / (24 * 16) * kt;
+    }
 
     for (i = 0; i < n; i++) {
         int32_t e, x, a, s;
