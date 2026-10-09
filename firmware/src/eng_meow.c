@@ -1,42 +1,40 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* MEOW: a cat's meow from every key, in the key's pitch. 4 voices.
  * Built on the VOICE engine (eng_formant.c): its glottal source, its Klatt resonators (fres_coef) and its
- * ratio table (fmt_ratio); three formants in cascade, F1 -> F2 -> F3 (a cat's F4 lies above the band
- * that matters, and dropping it keeps the cost below VOICE's).
+ * ratio table (fmt_ratio); four formants in cascade, F1 -> F4, plus Klatt's (JASA 67, 1980) bypass path.
  *
- * A meow is a voiced call with diphthong-like formant transitions whose F0 follows an arc that peaks
- * where the mouth is opened widest (Nicastro, after Schoetz & van de Weijer, Speech Prosody 2014). Each
- * note plays one, over LEN, as three curves of its progress u (0 .. 1):
+ * Fitted to measured meows, not to human vowels: CatMeows (Ludovico et al. 2020, Zenodo 4008297,
+ * CC BY-NC 4.0: 440 meows of 21 cats, 8 kHz; 429 analysed) and the meows of the Cat Sound
+ * Classification Dataset V2 (Pandeya & Lee 2018, Zenodo 4724180, CC BY 4.0, 44.1 kHz), analysed with
+ * Praat (parselmouth); no recording is in the firmware. Medians (CatMeows):
  *
- *   u       0 .. 0.12   0.12 .. 0.30   0.30 .. 0.60   0.60 .. 1
- *   mouth   [m] closed  [i]            [a] wide open  [u] closing
- *   pitch   below       rising         the key (peak) falling below the start
- *   level   ~35 %       opening        full           fading out
+ *   duration 0.61 s, F0 peak 694 Hz, mean 591 Hz, peak at 26 % of the call, F0 range 6.1 st
+ *   jitter 1.0 %, shimmer 8.9 %, HNR 17.8 dB (a cat's voice is far from a clean oscillator)
+ *   harmonics H1..H6 re the strongest: -8 -5 -11 -19 -24 -25 dB; the spectrum flat to ~3.5 kHz
+ *   F1 (LPC) ~1060 -> 1150 (20 .. 35 %) -> 835 Hz, F2 2000 -> 1750 Hz; the level: a fast onset
+ *   (-9 dB at 5 %), a broad top, a long fall
  *
- * The mouth is a cat's, not a person's: a vocal tract of about 8 cm (human adults ~17 cm), modelled as a
- * tube by Ekstroem, Cros Vila, Schoetz & Edlund, "A single formant explicates the ubiquity of 'meow'"
- * (VIHAR 2024, doi:10.31234/osf.io/edmuv): neutral F1 1103, F2 3309, F3 5516 Hz; raising the jaw lowers
- * them by about 703, 1247 and 1432 Hz. In so short a tract F2 and F3 lie too high to colour the vowel
- * much: the "iau" a listener hears is mostly F1 sweeping up and down with the jaw. So the mouth here is
- * one gesture, JAW (closed .. open) with lip ROUNDing at the end and a NASAL [m] at the start, not a
- * row of human vowels (human vowel formants, even scaled up, sound like a child singing "mi-a-u").
- * The [m] is a design choice, not a measurement: it makes the call read as "meow" to human ears.
- * Measured meows: mean F0 393 .. 661 Hz, mean duration 545 .. 932 ms (Schoetz, van de Weijer & Eklund,
- * PeerJ Preprints 2019): LEN's default is 0.7 s.
+ * Each note plays one call over LEN, as curves of its progress u (0 .. 1): level, jaw (F1 up and
+ * down with the pitch arc, the "iau" is mostly F1: Ekstroem, Cros Vila, Schoetz & Edlund, VIHAR 2024,
+ * doi:10.31234/osf.io/edmuv, a cat's tract of ~8 cm), lip rounding towards the end, a short nasal
+ * onset (a design choice: it reads as "m" to human ears) and the pitch arc, peaking at the key.
+ * Wide bands (the measured spectrum has no sharp formant peaks), a bright pulse, a +6 dB / oct shelf
+ * and the bypass give the flat spectrum; each glottal period draws its own length and level.
  *
  *   MODE    the call (MEOW; MEW MRRP YOWL PURR HISS play MEOW for now)
- *   SIZE    the tract: x1.33 .. x0.75 of the 8 cm cat's formants (kitten ~6 cm .. big tom ~11 cm)
- *   LEN     0.15 .. 1.5 s; at 127 the call holds at the open [a] while the key is held, then closes
- *   BEND    the arc, 0 .. 12 semitones: the start lies BEND / 2 below the key, the end BEND below
+ *   SIZE    the tract: x1.33 .. x0.75 of the formants (kitten .. big tom)
+ *   LEN     0.15 .. 1.5 s; at 127 the call holds at its peak while the key is held, then closes
+ *   BEND    the arc, 0 .. 12 semitones: the start ~BEND / 2 below the key, the end ~0.7 BEND below
  *   WOW     vibrato (6.5 Hz) in the second half, up to +-1 semitone
- *   BRTH    breath noise into the resonators
- *   ROUGH   every second glottal pulse weaker: a subharmonic an octave down (growl)
+ *   BRTH    breath noise into the resonators (default: the measured HNR)
+ *   ROUGH   every second glottal pulse weaker (a subharmonic, growl) and more jitter
  *   RAND    per note: LEN, BEND and SIZE wander (0 = every meow alike)
  *
  * The call is the voice's amplitude (meow_amp, engine_t.amp): a note plays its meow to the end, however
  * short the key or the step; the track's ADSR is not used. Velocity scales it as usual.
- * Voice state: ph[0] glottal phase, ph[1] vibrato phase, ph[2] bit 0 the pulse parity (ROUGH);
- * s[0..5] F1..F3 y1 / y2, s[6] tilt, s[7] progress (Q20, bits 0..20) and the note's random bits (21..31). */
+ * Voice state: ph[0] glottal phase, ph[1] F4 y2, ph[2] bit 0 the pulse parity, bits 1..15 this period's
+ * jitter / shimmer draw, 16..31 the vibrato phase; s[0..5] F1..F3 y1 / y2, s[6] F4 y1, s[7] progress
+ * (Q20, bits 0..20) and the note's random bits (21..31). */
 #define MEOW_U1 (1 << 20)                               /* u = 1: the call is over */
 #define MEOW_UMASK 0x001FFFFF
 #define MEOW_HOLD_U (MEOW_U1 * 45 / 100)                /* LEN 127: held here (the arc's peak) */
@@ -45,12 +43,14 @@
 enum { MEOW_M, MEOW_MEW, MEOW_MRRP, MEOW_YOWL, MEOW_PURR, MEOW_HISS, MEOW_NMODE };
 static const char *const N_MEOW_MODE[MEOW_NMODE] = {"MEOW", "MEW", "MRRP", "YOWL", "PURR", "HISS"};
 
-/* the 8 cm tract (Ekstroem et al. 2024): formants (Hz) with the jaw closed and how far opening it raises
- * them (to about the neutral tube's); lip rounding lowers them by up to these parts (Q8: protruded lips
- * lengthen the tract, F2 most); the nasal [m] pulls F1 to MEOW_NF1 and widens the bands above */
-static const uint16_t MEOW_F0[3] = {400, 2060, 4080}, MEOW_FJ[3] = {1000, 1250, 1430};
-static const uint8_t MEOW_RND[3] = {50, 77, 38};
-#define MEOW_NF1 300
+/* formants (Hz) with the jaw at its lowest point of the call and how far opening it raises them, lip
+ * rounding lowers them by up to these parts (Q8), bandwidths (Hz); the nasal onset pulls F1 to MEOW_NF1
+ * and widens the bands. Fitted so that the synthesis, analysed as the recordings, gives their LPC
+ * formants and harmonic levels (LPC reads F1 ~15 % high at these F0: the F1 here is lower) */
+static const uint16_t MEOW_F0[4] = {650, 1750, 3000, 5200}, MEOW_FJ[4] = {300, 300, 500, 300};
+static const uint8_t MEOW_RND[4] = {0, 26, 13, 8};
+static const uint16_t MEOW_BW[4] = {500, 1000, 400, 500};
+#define MEOW_NF1 500
 
 /* a curve: points (u Q8, value), smoothstep between them; the first point at u 0, the last at 256 */
 typedef struct { uint8_t u; int16_t v; } mpt_t;
@@ -66,14 +66,15 @@ static int32_t mcurve(const mpt_t *c, uint32_t n, int32_t u8)   /* u8: u * 256 i
     return c[i - 1].v + (((c[i].v - c[i - 1].v) * t) >> 8);
 }
 
-/* MEOW: level (Q8 of full), jaw (Q8: closed .. open), rounding and nasality (Q8), pitch (Q8 of BEND, 0 = the key).
- * One gesture: the jaw opens to its widest at the pitch peak (u ~0.45) and closes again, the lips round
- * towards the end ([u]), the [m] lets go as the jaw starts to open */
-static const mpt_t MEOW_AMP[] = {{0, 0}, {8, 80}, {28, 90}, {80, 256}, {145, 256}, {215, 120}, {255, 0}};
-static const mpt_t MEOW_JAW[] = {{0, 0}, {26, 0}, {52, 70}, {115, 256}, {160, 225}, {228, 40}, {255, 0}};
-static const mpt_t MEOW_ROUND[] = {{0, 0}, {140, 0}, {215, 256}, {255, 256}};
-static const mpt_t MEOW_NASAL[] = {{0, 256}, {22, 256}, {42, 0}, {255, 0}};
-static const mpt_t MEOW_PITCH[] = {{0, -140}, {31, -120}, {115, 0}, {165, -40}, {255, -256}};
+/* MEOW: level (Q8 of full), jaw (Q8), rounding and nasality (Q8), pitch (Q8 of BEND, 0 = the key).
+ * After the CatMeows medians: a fast onset (-9 dB at 5 %), a broad top, a long fall (-10 dB at 75 %); the
+ * F0 peak early (median 26 % of the call), the call ending below its start (F0 range in a call: median
+ * 6.1 st, IQR 3.6 .. 11.7); the jaw widest with the pitch, the lips rounding towards the end */
+static const mpt_t MEOW_AMP[] = {{0, 0}, {13, 150}, {40, 200}, {95, 256}, {150, 190}, {190, 125}, {230, 65}, {255, 0}};
+static const mpt_t MEOW_JAW[] = {{0, 150}, {20, 190}, {64, 256}, {110, 240}, {170, 170}, {230, 40}, {255, 0}};
+static const mpt_t MEOW_ROUND[] = {{0, 0}, {120, 0}, {220, 256}, {255, 256}};
+static const mpt_t MEOW_NASAL[] = {{0, 256}, {8, 200}, {24, 0}, {255, 0}};
+static const mpt_t MEOW_PITCH[] = {{0, -100}, {13, -120}, {70, 0}, {130, -50}, {200, -110}, {255, -180}};
 
 /* the note's random value k (-128 .. 127, three of them from 11 bits), scaled by RAND */
 static int32_t meow_rnd(const voice_t *v, const int16_t *p, uint32_t k)
@@ -129,12 +130,12 @@ level:
 static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
-    fres_t r1, r2, r3;
-    int32_t f[3], b[3], j, buzz, oq, tilt, gv, gn, og, ogk, jaw, rnd, nas, bend, pst, lvl, rough;
-    uint32_t inc, i, te, tp, rp, rn, ratio, f0, ph = v->ph[0], par = v->ph[2] & 1u;
+    fres_t r1, r2, r3, r4;
+    int32_t f[4], b[4], j, buzz, oq, gv, ogb, gn, og, ogk, jaw, rnd, nas, bend, pst, lvl, rough, ja, gq, incj;
+    uint32_t inc, incq, i, te, tp, rp, rn, ratio, f0, ph = v->ph[0], ap = v->ph[2], par = ap & 1u;
     int32_t u8 = (int32_t)(((uint32_t)v->s[7] & MEOW_UMASK) >> 4);   /* u, Q16 of 256 */
     int32_t y1 = v->s[0], y2 = v->s[1], y3 = v->s[2], y4 = v->s[3], y5 = v->s[4], y6 = v->s[5];
-    int32_t lp = v->s[6], nst = formant_nz;
+    int32_t y7 = v->s[6], y8 = (int32_t)v->ph[1], nst = formant_nz;
 
     /* pitch: the arc (BEND, RAND +-40 %) and WOW in the second half */
     bend = p[P_E3] * 16;
@@ -142,8 +143,8 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     pst = (mcurve(MEOW_PITCH, NELEM(MEOW_PITCH), u8) * bend) >> 8;
     if (p[P_E4] && u8 > 100 << 8) {                     /* vibrato fades in from u 0.39 to 0.6 */
         int32_t fade = clamp((u8 - (100 << 8)) / 54, 0, 256);
-        v->ph[1] += 20280000u;                          /* 6.5 Hz per control tick: 6.5 * CTL / FS * 2^32 */
-        pst += (((sine_i(v->ph[1]) * p[P_E4]) >> 15) * fade * 16 / 127) >> 8;   /* +-1 semitone */
+        ap += 309u << 16;                               /* 6.5 Hz per control tick (16-bit phase in ph[2] 16..31) */
+        pst += (((sine_i(ap & 0xFFFF0000u) * p[P_E4]) >> 15) * fade * 16 / 127) >> 8;   /* +-1 semitone */
     }
     {
         uint32_t r = fmt_ratio(pst);
@@ -155,14 +156,14 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     rnd = mcurve(MEOW_ROUND, NELEM(MEOW_ROUND), u8);
     nas = mcurve(MEOW_NASAL, NELEM(MEOW_NASAL), u8);
     ratio = fmt_ratio((64 - p[P_E1]) * 5 / 4 + ((meow_rnd(v, p, 2) * 32) >> 7) +   /* +-5 st: x1.33 .. x0.75 */
-                      ((MEOW_FOLOW * (v->pitch_cur - 60 * 16) * 516) >> 16) + (m->cutoff >> 8));
+                      ((MEOW_FOLOW * (v->pitch_cur - 72 * 16) * 516) >> 16) + (m->cutoff >> 8));
     f0 = (uint32_t)(((uint64_t)inc * 705600u) >> 32);   /* F0 in Hz * 16 */
-    for (j = 0; j < 3; j++) {
+    for (j = 0; j < 4; j++) {
         int32_t ff = (MEOW_F0[j] << 4) + ((MEOW_FJ[j] * jaw) >> 4), bb;   /* Hz * 16 */
         ff -= (((ff * MEOW_RND[j]) >> 8) * rnd) >> 8;
         if (j == 0)
             ff += (((MEOW_NF1 << 4) - ff) * nas) >> 8;
-        bb = 80 * 16 + ff / 14;                         /* ~7 % of F plus 80 Hz: rounder than VOICE's narrow bands */
+        bb = MEOW_BW[j] << 4;
         bb += (bb * nas * (j ? 3 : 1)) >> 8;            /* [m]: the nose damps the bands, F2 / F3 most */
         ff = (int32_t)(((int64_t)ff * ratio) >> 16);
         bb = (int32_t)(((int64_t)bb * ratio) >> 16);
@@ -176,12 +177,12 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     fres_coef(&r1, (uint32_t)f[0], (uint32_t)b[0]);
     fres_coef(&r2, (uint32_t)f[1], (uint32_t)b[1]);
     fres_coef(&r3, (uint32_t)f[2], (uint32_t)b[2]);
+    fres_coef(&r4, (uint32_t)f[3], (uint32_t)b[3]);
 
     /* source: brighter as the call gets louder ([m] dark, [a] open), + SHP, + velocity */
     lvl = mcurve(MEOW_AMP, NELEM(MEOW_AMP), u8);        /* Q8 */
-    buzz = clamp(((30 + ((lvl * 45) >> 8)) << 8) + m->shape - (64 << 8) + (v->vel - 96) * 40, 0, 127 << 8);
+    buzz = clamp(((100 + ((lvl * 20) >> 8)) << 8) + m->shape - (64 << 8) + (v->vel - 96) * 40, 0, 127 << 8);
     oq = 58982 - ((buzz * 284) >> 8);                   /* open quotient Q16: 0.90 .. 0.35 */
-    tilt = 2500 + ((buzz * 109) >> 8);
     te = (uint32_t)oq << 16;
     tp = (te >> 8) * 166u;
     rp = (1u << 30) / ((tp >> 16) | 1u);
@@ -189,9 +190,19 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     gv = 32767 - p[P_E5] * p[P_E5];                     /* BRTH: voicing fades to half at the top */
     gn = p[P_E5] * 200;
     rough = 32767 - p[P_E6] * 180;                      /* ROUGH: the weak pulse, 1.0 .. 0.3 */
+    /* a voice is never exactly periodic: each glottal period draws its length and its pulse's level.
+     * CatMeows (Praat, local): jitter median 1.0 %, shimmer 8.9 %, HNR 17.8 dB. Uniform +-a per period
+     * gives a local jitter of 2a / 3: a = 1.5 % (+ up to 3 % more with ROUGH), shimmer +-10 % */
+    ja = 983 + p[P_E6] * 15;                            /* Q16 of the period */
+    incj = (((int32_t)(inc >> 8) * (int8_t)(ap & 0xFEu)) >> 7) * ja >> 8;
+    incq = inc + (uint32_t)incj;
+    gq = 32768 + (((int8_t)(ap >> 8) * 3277) >> 7);
+    if (par)
+        gq = (gq * rough) >> 15;
     og = 11000;
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - v->pitch_cur) / 4)) >> 16);   /* 1.5 dB / oct (as VOICE) */
-    ogk = (og >> 3) * (1 + (buzz >> 11));               /* presence k = 0.12 .. 0.8: soft, the formants are high already */
+    ogk = og * (1 + (buzz >> 11));                      /* the shelf: k = 1 .. 7.2 (+6 dB / oct above ~1 kHz) */
+    ogb = og;                                           /* the bypass: the pulse itself, for the band above F4 */
 
     for (i = 0; i < n; i++) {
         int32_t e, x, a, s;
@@ -201,11 +212,9 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
             e = -sine_i(((ph - tp) >> 16) * rn);
         else
             e = 0;
-        e += blep(ph - te, inc) >> 1;
-        if (par)
-            e = (e * rough) >> 15;
-        lp += ((e - lp) * tilt) >> 14;
-        x = (lp * gv) >> 15;
+        e += blep(ph - te, incq) >> 1;
+        e = (e * gq) >> 15;
+        x = (e * gv) >> 15;
         if (gn) {
             int32_t nz = (((int32_t)(noise32(&nst) >> 16) - 32768) * gn) >> 15;
             x += ph < te ? nz : nz >> 1;
@@ -218,15 +227,26 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         y3 = a;
         a = (int32_t)(((int64_t)r3.a * a + (int64_t)r3.b * y5 + (int64_t)r3.c * y6 + (1 << 29)) >> 30);
         y6 = y5;
-        y5 = clamp(a, -(1 << 28), 1 << 28);
-        s = soft_knee(clamp((int32_t)(((int64_t)y5 * og + (int64_t)(y5 - y6) * ogk) >> 21), -200000, 200000), 24000);
-        if (ph + inc < ph)                              /* a new glottal period: the other pulse */
+        y5 = a;
+        a = (int32_t)(((int64_t)r4.a * a + (int64_t)r4.b * y7 + (int64_t)r4.c * y8 + (1 << 29)) >> 30);
+        y8 = y7;
+        y7 = clamp(a, -(1 << 28), 1 << 28);
+        s = soft_knee(clamp((int32_t)(((int64_t)y7 * og + (int64_t)(y7 - y8) * ogk + (int64_t)(x << 6) * ogb) >> 21), -200000, 200000), 24000);
+        if (ph + incq < ph) {                           /* a new glottal period: its length, its level */
             par ^= 1u;
-        ph += inc;
+            ap = (ap & 0xFFFF0000u) | (noise32(&nst) & 0xFFFEu) | par;
+            incj = (((int32_t)(inc >> 8) * (int8_t)(ap & 0xFEu)) >> 7) * ja >> 8;
+            incq = inc + (uint32_t)incj;
+            gq = 32768 + (((int8_t)(ap >> 8) * 3277) >> 7);
+            if (par)
+                gq = (gq * rough) >> 15;
+        }
+        ph += incq;
         out[i] += voice_amp(s, m, i) << 1;
     }
     v->ph[0] = ph;
-    v->ph[2] = (v->ph[2] & ~1u) | par;
+    v->ph[1] = (uint32_t)y8;
+    v->ph[2] = (ap & ~1u) | par;
     formant_nz = nst;
     v->s[0] = y1;
     v->s[1] = y2;
@@ -234,12 +254,12 @@ static void meow_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     v->s[3] = y4;
     v->s[4] = y5;
     v->s[5] = y6;
-    v->s[6] = lp;
+    v->s[6] = y7;
 }
 
 static const preset_t MEOW_PRESETS[] = {
     /* MODE SIZE LEN BEND | WOW BRTH ROUGH RAND */
-    {"MEOW LEAD", {MEOW_M, 64, 84, 5, 30, 12, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(4)},
+    {"MEOW LEAD", {MEOW_M, 64, 84, 6, 30, 45, 10, 30}, {0, 64, 127, 40}, 0, 0, FX(0, 20, 30, 40), PAT(4)},
 };
 
 static const engine_t ENG_MEOW = {
@@ -249,9 +269,9 @@ static const engine_t ENG_MEOW = {
         {"MODE", F_ENUM, 0, MEOW_NMODE - 1, 0, N_MEOW_MODE, 0},
         {"SIZE", F_INT, 0, 127, 64, 0, 0},
         {"LEN", F_INT, 0, 127, 84, 0, 0},
-        {"BEND", F_SEMI, 0, 12, 5, 0, 0},
+        {"BEND", F_SEMI, 0, 12, 6, 0, 0},
         {"WOW", F_PCT, 0, 127, 30, 0, 0},
-        {"BRTH", F_PCT, 0, 127, 12, 0, 0},
+        {"BRTH", F_PCT, 0, 127, 45, 0, 0},
         {"ROUGH", F_PCT, 0, 127, 10, 0, 0},
         {"RAND", F_PCT, 0, 127, 30, 0, 0},
     },
