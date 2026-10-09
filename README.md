@@ -1,28 +1,81 @@
-# Felucca
+# MEOW-1 — a Meowthesizer for the M-VAVE FM-1
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/Sponsor-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/hugelton)
+
+**MEOW-1 is a fork of [Felucca](https://github.com/hugelton/Felucca) 1.4.1** (alternative firmware for the M-VAVE
+FM-1 by Leo Kuroshita / Hügelton Instruments) that turns the FM-1 into a cat groovebox. It adds one engine, **MEOW**,
+and starts with a cat band on the four tracks. Everything else is Felucca's: the sequencer, effects, songs, the other
+13 engines, projects and presets. This fork is not affiliated with Hügelton Instruments or M-VAVE; please report
+MEOW-1 issues here, not to Felucca.
+
+## The MEOW engine
+
+Every key plays a synthesized cat call in its pitch. No recordings are played back: the calls are built from
+Felucca's VOICE engine (a glottal source and Klatt formant resonators) and fitted, by measurement, to recorded
+cats (see *How the sound was made*). 4 voices.
+
+| MODE | the call | for |
+|---|---|---|
+| **MEOW** | [m]-[i]-[a]-[u]: an early pitch peak at the key, the mouth opening and closing with it | melodies |
+| **MEW** | short and high, a small arc | fast lines, arpeggios |
+| **MRRP** | a trill (pulsed at 25 Hz), rising like a question | percussion, accents |
+| **YOWL** | long, a slow vibrato, [a] closing to [o]-[u] | leads, drama |
+| **PURR** | the larynx's clicks; the key sets their rate (C1 ≈ a real purr), a breath swell | bass |
+| **HISS** | breath only: a spit at short LEN, a hiss at long LEN; the key colours it | hi-hats |
+
+Knobs: **MODE**, **SIZE** (kitten … big tom), **LEN** (0.15 … 1.5 s; at the top a call holds while the key is
+held), **BEND** (the pitch arc, 0 … 12 semitones), **WOW** (vibrato), **BRTH** (breath), **ROUGH** (growl:
+subharmonics, jitter), **RAND** (every call a little different). HOME's knobs: SIZE, LEN, BEND, ROUGH. MIDI CC74 /
+CC71: SIZE / ROUGH. A call plays to its end however short the key or step (the track's ADSR is not used).
+
+Presets: MEOW LEAD, HISS HAT, PURR BASS, MRRP, YOWL, MEW, KITTEN, TOMCAT, PURR SUB, HISS OPEN. Factory pattern 14:
+**MIAU**. At power-on: track 1 **PURR BASS**, 2 **MEOW LEAD**, 3 **HISS HAT**, 4 **DRUM KIT**.
+
+## How the sound was made
+
+Each call was measured on recordings and on the engine's own output with the same Praat (parselmouth) analysis
+(`tools/meow/`), and the engine was tuned until they matched: duration, the pitch contour, the level contour,
+jitter, shimmer, harmonics-to-noise ratio, formant paths, harmonic levels and the long-term spectrum. No recording
+is part of the firmware.
+
+- MEOW: CatMeows (Ludovico et al. 2020, [Zenodo 4008297](https://zenodo.org/records/4008297), CC BY-NC 4.0; 429
+  meows of 21 cats) and the meows of the Cat Sound Classification Dataset V2 (Pandeya & Lee 2018,
+  [Zenodo 4724180](https://zenodo.org/records/4724180), CC BY 4.0). Medians: 0.61 s, F0 peak 694 Hz at 26 % of the
+  call, jitter 1.0 %, shimmer 8.9 %, HNR 17.8 dB, a spectrum flat to ~3.5 kHz
+- the cat's ~8 cm vocal tract and why "meow" is mostly F1: Ekström, Cros Vila, Schötz & Edlund, *A single formant
+  explicates the ubiquity of "meow"*, VIHAR 2024 (doi:10.31234/osf.io/edmuv)
+- F0 and durations of meows: Schötz, van de Weijer & Eklund, *Melody Matters*, PeerJ Preprints 2019
+- PURR: the five purrs of the dataset above (pulses at 28.3 … 28.7 Hz, a breath cycle of ~0.8 s)
+- YOWL: its long calls (1.2 … 3.7 s, vibrato 3.5 … 4.8 Hz); MRRP: Schötz's chirrup / murmur figures (cited in
+  J. Vet. Sci. 21 (2020) e18)
+- HISS: a recorded hiss, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Cat_hissing_-_Zabuhailo.wav), CC0
+
+## Install
+
+MEOW-1 is not on Felucca's web installer (that one installs Felucca). Build it (`./build.sh`, see
+[BUILDING.md](BUILDING.md)) and install `build/felucca.fwsc`, either
+
+- **from the command line** (`pip3 install mido python-rtmidi`): `python3 tools/fm1_install.py build/felucca.fwsc`, or
+- **from a local copy of the web installer** (Chrome or Edge):
+  `python3 web/make_site.py build/felucca.fwsc dev site && cd site && python3 -m http.server 8000`, then open
+  <http://localhost:8000/webapp/installer/>.
+
+**Back up first:** projects, user presets and samples, with the web editor's full backup (the local site's
+`webapp/editor/`, or Felucca's). MEOW is engine 14: Felucca itself does not know it, so a project or user preset
+with a MEOW track plays wrong on Felucca. Installing firmware is at your own risk; the installer's
+**Return to official V15** (with the unmodified FM-1.fwsc from M-VAVE) or M-VAVE's updater go back to the stock
+firmware, and if an install fails and the FM-1 no longer starts, recovery needs
+[FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
+
+## Felucca
+
+Everything below is Felucca's own README (1.4.1), unchanged: it describes the firmware MEOW-1 is built on.
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.4.1 — 1.4 plus DRUM lane mutes on the EDIT layer and an FM6 voice bank, field testing. Connect your FM-1 to a computer by USB,
-open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
-no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
-**Return to official V15** takes you back. Coming from 1.1.5.x? Read [⚠ Coming from 1.1.5](#-coming-from-115) first:
-projects saved by 1.4 or 1.4.1 do not open on 1.1.5.x. Want to look around first?
-[Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
-
-Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you find in
-[Issues](https://github.com/hugelton/Felucca/issues).
-
-- Install: [web installer](https://hugelton.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
-- Try: [Felucca in your browser](https://hugelton.github.io/Felucca/webapp/try/): the same firmware compiled to
-  WebAssembly, with the panel on screen (mouse, touch, computer keyboard, Web MIDI in)
-- Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/); its development has moved to
-  [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)
-- Build: [BUILDING.md](BUILDING.md)
-
-<a href="https://hugelton.itch.io/felucca"><img src="https://static.itch.io/images/badge-color.svg" alt="Available on itch.io" width="74"></a>
+Multi-engine synthesizer firmware for the M-VAVE FM-1 by Hügelton Instruments: [Felucca on GitHub](https://github.com/hugelton/Felucca),
+[web installer](https://hugelton.github.io/Felucca/) (installs Felucca, not MEOW-1),
+[try it in your browser](https://hugelton.github.io/Felucca/webapp/try/).
 
 ## Features
 
